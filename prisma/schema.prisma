@@ -1,0 +1,164 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// SQLite does not support native enums, so we use String with comments:
+// Role: USER | ADMIN
+// MediaType: VIDEO | IMAGE
+// ModerationStatus: PENDING | APPROVED | REJECTED
+// ReportStatus: PENDING | REVIEWED | RESOLVED | DISMISSED
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  password      String?   // hashed password for credentials auth
+  role          String   @default("USER") // USER | ADMIN
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  uploads       Status[]
+  bookmarks     Bookmark[]
+  reports       Report[]
+  accounts      Account[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  icon        String?  // lucide icon name
+  description String?
+  color       String?  // hex color for UI
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  statuses    Status[]
+
+  @@map("categories")
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  statuses  Status[] @relation("StatusTags")
+
+  @@map("tags")
+}
+
+model Status {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  title         String
+  description   String?
+  type          String   // VIDEO | IMAGE
+  url           String   // Cloudinary URL
+  thumbnail     String   // Cloudinary thumbnail URL
+  duration      Int?     // seconds (for video)
+  size          Int      // bytes
+  resolution    String   // e.g. "1080x1920"
+  views         Int      @default(0)
+  downloads     Int      @default(0)
+  status        String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  rejectionReason String?
+  categoryId    String
+  category      Category @relation(fields: [categoryId], references: [id])
+  authorId      String
+  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  tags          Tag[]    @relation("StatusTags")
+  bookmarks     Bookmark[]
+  reports       Report[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  publishedAt   DateTime?
+
+  @@index([categoryId, status])
+  @@index([authorId])
+  @@index([status, createdAt])
+  @@index([views])
+  @@index([downloads])
+  @@map("statuses")
+}
+
+model Bookmark {
+  userId    String
+  statusId  String
+  createdAt DateTime @default(now())
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    Status  @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@id([userId, statusId])
+  @@map("bookmarks")
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  reason      String?
+  status      String   @default("PENDING") // PENDING | REVIEWED | RESOLVED | DISMISSED
+  statusId    String
+  statusRef   Status   @relation(fields: [statusId], references: [id], onDelete: Cascade)
+  reporterId  String
+  reporter    User     @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  reviewedAt  DateTime?
+  reviewedBy  String?
+
+  @@map("reports")
+}
